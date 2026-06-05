@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sequoia & Kings Canyon Trip Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #222; }
+  header { background: #E65100; color: #fff; padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header span { font-size: 13px; opacity: 0.85; }
+  #map { width: 100%; height: calc(100vh - 130px); min-height: 400px; }
+  .controls { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .filter-btn { font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid #ccc; background: #fff; color: #555; cursor: pointer; transition: all 0.15s; }
+  .filter-btn.active { background: #333; color: #fff; border-color: #333; font-weight: 500; }
+  .legend { position: absolute; bottom: 28px; right: 10px; z-index: 1000; background: rgba(255,255,255,0.96); border-radius: 8px; border: 1px solid #ddd; padding: 12px 14px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); max-width: 200px; }
+  .legend h3 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #444; }
+  .ldot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+  .lsym { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; border: 2px solid rgba(255,255,255,0.7); }
+  .lcamp { width: 22px; height: 22px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; background: #E65100; border: 2px solid #fff; }
+  .legend-divider { border: none; border-top: 1px solid #eee; margin: 8px 0; }
+  .popup-title { font-weight: 600; font-size: 14px; margin-bottom: 3px; color: #111; }
+  .popup-type { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .popup-meta { font-size: 12px; color: #666; margin-bottom: 2px; }
+  .popup-desc { font-size: 12px; color: #444; line-height: 1.45; margin: 6px 0; }
+  .popup-links { display: flex; gap: 10px; margin-top: 6px; }
+  .popup-links a { font-size: 12px; color: #1a73e8; text-decoration: none; font-weight: 500; }
+  .popup-links a:hover { text-decoration: underline; }
+  .camp-tag { display: inline-block; background: #E65100; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; margin-bottom: 5px; letter-spacing: 0.04em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏕️ Sequoia & Kings Canyon — Trip Map</h1>
+    <span>Sunset Campground · Grant Grove · Kings Canyon NP</span>
+  </div>
+</header>
+
+<div class="controls" id="filters">
+  <strong style="font-size:12px;color:#888;margin-right:4px;">Show:</strong>
+  <button class="filter-btn active" data-cat="all">All</button>
+  <button class="filter-btn active" data-cat="half">🥾 Half-day hikes</button>
+  <button class="filter-btn active" data-cat="full">🥾 Full-day hikes</button>
+  <button class="filter-btn active" data-cat="nature">🌿 Nature walks</button>
+  <button class="filter-btn active" data-cat="activity">⭐ Activities</button>
+  <button class="filter-btn active" data-cat="food">🛒 Food & supplies</button>
+</div>
+
+<div style="position:relative;">
+  <div id="map"></div>
+  <div class="legend">
+    <h3>Base camp</h3>
+    <div class="legend-item"><div class="lcamp">🏕️</div> Sunset Campground</div>
+    <hr class="legend-divider"/>
+    <h3>Hike type</h3>
+    <div class="legend-item"><div class="lsym" style="background:#4CAF50;">🥾</div> Half-day hike</div>
+    <div class="legend-item"><div class="lsym" style="background:#FF9800;">🥾</div> Full-day hike</div>
+    <div class="legend-item"><div class="lsym" style="background:#9C27B0;">🌿</div> Nature walk</div>
+    <hr class="legend-divider"/>
+    <h3>Distance</h3>
+    <div class="legend-item"><div class="ldot" style="background:#4CAF50;"></div> Short (&lt;2 mi)</div>
+    <div class="legend-item"><div class="ldot" style="background:#FF9800;"></div> Medium (2–5 mi)</div>
+    <div class="legend-item"><div class="ldot" style="background:#F44336;"></div> Long (&gt;5 mi)</div>
+    <hr class="legend-divider"/>
+    <h3>Other</h3>
+    <div class="legend-item"><div class="lsym" style="background:#2196F3;">⭐</div> Activity</div>
+    <div class="legend-item"><div class="lsym" style="background:#795548;">🛒</div> Food & supplies</div>
+  </div>
+</div>
+
+<script>
+const locations = [
+  {name:"General Grant Tree Trail",cat:"half",dist:0.6,lat:36.7474,lng:-118.9718,area:"Grant Grove",desc:"2nd largest tree in the world. Short paved loop. Walk through the Fallen Monarch.",drive:"5 min (walk)",maps:"https://www.google.com/maps/search/?api=1&query=General+Grant+Tree+Trail+Kings+Canyon+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/general-grant-tree-trail"},
+  {name:"North Grove Loop",cat:"half",dist:1.5,lat:36.748,lng:-118.971,area:"Grant Grove",desc:"Same sequoias, way fewer people than General Grant. Nice creek and meadow sections.",drive:"5 min (walk)",maps:"https://www.google.com/maps/search/?api=1&query=North+Grove+Loop+Kings+Canyon+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/north-grove-loop"},
+  {name:"Big Stump Loop",cat:"half",dist:1.7,lat:36.7321,lng:-118.9637,area:"Big Stump Entrance",desc:"The Mark Twain stump is huge and climbable.",drive:"10 min",maps:"https://www.google.com/maps/search/?api=1&query=Big+Stump+Trail+Kings+Canyon+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/big-stump-loop"},
+  {name:"Panoramic Point",cat:"half",dist:1.0,lat:36.7548,lng:-118.9632,area:"Grant Grove",desc:"Great views of Kings Canyon and the High Sierra.",drive:"10 min drive",maps:"https://www.google.com/maps/search/?api=1&query=Panoramic+Point+Kings+Canyon+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/panoramic-point-trail"},
+  {name:"Azalea Trail",cat:"half",dist:3.0,lat:36.7458,lng:-118.972,area:"Grant Grove",desc:"Follows Sequoia Creek through ferns and wildflowers. Pretty chill walk.",drive:"5 min (walk)",maps:"https://www.google.com/maps/search/?api=1&query=Kings+Canyon+Visitor+Center+Grant+Grove+Village+CA",alltrails:"https://www.alltrails.com/trail/us/california/azalea-trail-kings-canyon"},
+  {name:"Mist Falls",cat:"full",dist:9.1,lat:36.7894,lng:-118.5743,area:"Cedar Grove",desc:"The go-to hike in Cedar Grove. Long but worth it.",drive:"45 min",maps:"https://www.google.com/maps/search/?api=1&query=Mist+Falls+Trailhead+Kings+Canyon+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/mist-falls-trail"},
+  {name:"Big Baldy Ridge",cat:"full",dist:4.2,lat:36.6955,lng:-118.8997,area:"Generals Highway",desc:"Granite dome with views over Redwood Canyon. Not as crowded as the famous trails.",drive:"20 min",maps:"https://www.google.com/maps/search/?api=1&query=Big+Baldy+Trailhead+Sequoia+National+Forest+CA",alltrails:"https://www.alltrails.com/trail/us/california/big-baldy-trail"},
+  {name:"Congress Trail & Giant Forest",cat:"full",dist:2.0,lat:36.5819,lng:-118.7514,area:"Giant Forest, Sequoia NP",desc:"Passes General Sherman (biggest tree on Earth by volume), the Senate/House Groves, and Cathedral Trees.",drive:"1 hr",maps:"https://www.google.com/maps/search/?api=1&query=General+Sherman+Tree+Sequoia+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/congress-trail-loop"},
+  {name:"Tokopah Falls",cat:"full",dist:3.7,lat:36.5987,lng:-118.727,area:"Lodgepole, Sequoia NP",desc:"River walk with granite walls on both sides. Ends at a 1,200 ft waterfall. Good chance of seeing marmots and bears.",drive:"1 hr",maps:"https://www.google.com/maps/search/?api=1&query=Tokopah+Falls+Trailhead+Lodgepole+Sequoia+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/tokopah-falls-trail"},
+  {name:"Zumwalt Meadow Loop",cat:"nature",dist:1.8,lat:36.7946,lng:-118.5794,area:"Cedar Grove",desc:"Flat loop along the Kings River with granite walls all around.",drive:"45 min",maps:"https://www.google.com/maps/search/?api=1&query=Zumwalt+Meadow+Kings+Canyon+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/zumwalt-meadow-loop"},
+  {name:"Redwood Mountain Grove",cat:"nature",dist:7.0,lat:36.6978,lng:-118.9266,area:"South of Grant Grove",desc:"Largest sequoia grove in the world and almost nobody goes. Hart Tree and Sugarbowl are great loop options.",drive:"15 min",maps:"https://www.google.com/maps/search/?api=1&query=Redwood+Mountain+Grove+Kings+Canyon+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/redwoods-grove"},
+  {name:"Round Meadow (Big Trees Trail)",cat:"nature",dist:1.0,lat:36.5826,lng:-118.7706,area:"Giant Forest, Sequoia NP",desc:"Easy paved loop through a meadow ringed by sequoias. Rangers do walks here.",drive:"1 hr",maps:"https://www.google.com/maps/search/?api=1&query=Round+Meadow+Sequoia+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/the-big-trees-trail"},
+  {name:"Hitchcock Meadow",cat:"nature",dist:0.5,lat:36.7316,lng:-118.9625,area:"Grant Grove",desc:"Quick walk to a small meadow off the Big Stump Loop. Basically no one comes here.",drive:"10 min",maps:"https://www.google.com/maps/search/?api=1&query=Big+Stump+Picnic+Area+Kings+Canyon+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/hitchcock-meadow"},
+  {name:"Muir Grove Trail",cat:"nature",dist:4.0,lat:36.6516,lng:-118.8316,area:"Dorst Creek, Sequoia NP",desc:"Quiet trail to a remote sequoia grove.",drive:"35 min",maps:"https://www.google.com/maps/search/?api=1&query=Dorst+Creek+Campground+Sequoia+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/muir-grove-trail"},
+  {name:"Crescent Meadow & Tharp's Log",cat:"nature",dist:1.8,lat:36.5564,lng:-118.7452,area:"Giant Forest, Sequoia NP",desc:"Nice meadow with sequoias all around. Tharp's Log is a hollowed-out sequoia someone actually lived in.",drive:"1 hr",maps:"https://www.google.com/maps/search/?api=1&query=Crescent+Meadow+Sequoia+National+Park+CA",alltrails:"https://www.alltrails.com/trail/us/california/high-sierra-tharp-s-log-and-crescent-meadow-loop"},
+  {name:"General Sherman Tree",cat:"activity",lat:36.5819,lng:-118.7514,area:"Giant Forest, Sequoia NP",desc:"Biggest tree on Earth by volume.",maps:"https://www.google.com/maps/search/?api=1&query=General+Sherman+Tree+Sequoia+National+Park+CA"},
+  {name:"Giant Forest Museum",cat:"activity",lat:36.5836,lng:-118.772,area:"Giant Forest, Sequoia NP",desc:"Great intro to the sequoia ecosystem.",maps:"https://www.google.com/maps/search/?api=1&query=Giant+Forest+Museum+Sequoia+National+Park+CA"},
+  {name:"Hume Lake Swimming",cat:"activity",lat:36.794,lng:-118.9022,area:"Hume Lake, Kings Canyon",desc:"Sandy Cove beach — swimming and hanging out.",maps:"https://www.google.com/maps/search/?api=1&query=Hume+Lake+Kings+Canyon+National+Park+CA"},
+  {name:"Crystal Cave Tour",cat:"activity",lat:36.5444,lng:-118.803,area:"Crystal Cave, Sequoia NP",desc:"Marble cave with stalactites and formations. Buy tickets in advance.",maps:"https://www.google.com/maps/search/?api=1&query=Crystal+Cave+Sequoia+National+Park+CA"},
+  {name:"Boyden Cavern Tour",cat:"activity",lat:36.8213,lng:-118.733,area:"Kings Canyon Scenic Byway",desc:"Cave tour along the Kings Canyon drive.",maps:"https://www.google.com/maps/search/?api=1&query=Boyden+Cavern+Kings+Canyon+National+Park+CA"},
+  {name:"Kings Canyon Scenic Byway",cat:"activity",lat:36.7898,lng:-118.575,area:"Kings Canyon",desc:"One of the most dramatic canyon drives in the country.",maps:"https://www.google.com/maps/search/?api=1&query=Cedar+Grove+Kings+Canyon+National+Park+CA"},
+  {name:"Moro Rock",cat:"activity",lat:36.5465,lng:-118.7647,area:"Giant Forest, Sequoia NP",desc:"Staircase climb to a granite dome with 360° views.",maps:"https://www.google.com/maps/search/?api=1&query=Moro+Rock+Sequoia+National+Park+CA"},
+  {name:"Sunset at Panoramic Point",cat:"activity",lat:36.7548,lng:-118.9631,area:"Grant Grove",desc:"Great sunset spot above Grant Grove.",maps:"https://maps.app.goo.gl/ohoGoCAvpJywDift6"},
+  {name:"Buck Rock Fire Lookout",cat:"activity",lat:36.6788,lng:-118.8519,area:"Near Big Meadows",desc:"Historic lookout tower with sweeping views.",maps:"https://www.google.com/maps/search/?api=1&query=Buck+Rock+Lookout+Sequoia+National+Forest+CA"},
+  {name:"Knapp's Cabin",cat:"activity",lat:36.7872,lng:-118.5884,area:"Cedar Grove",desc:"Historic stone cabin with Kings River views.",maps:"https://www.google.com/maps/search/?api=1&query=Knapp%27s+Cabin+Kings+Canyon+National+Park+CA"},
+  {name:"Junction View",cat:"activity",lat:36.833,lng:-118.663,area:"Hwy 180, Kings Canyon",desc:"Great overlook down into Kings Canyon.",maps:"https://www.google.com/maps/search/?api=1&query=Junction+View+Kings+Canyon+National+Park+CA"},
+  {name:"Redwood Mountain Overlook",cat:"activity",lat:36.7032,lng:-118.9286,area:"Generals Highway",desc:"Overlook above the Redwood Mountain Grove.",maps:"https://www.google.com/maps/search/?api=1&query=Redwood+Mountain+Overlook+Kings+Canyon+National+Park+CA"},
+  {name:"Road's End",cat:"activity",lat:36.7946,lng:-118.5574,area:"Cedar Grove",desc:"The end of the road into Kings Canyon — stunning valley views.",maps:"https://www.google.com/maps/search/?api=1&query=Roads+End+Kings+Canyon+National+Park+CA"},
+  {name:"Grant Grove Market",cat:"food",lat:36.7457,lng:-118.9716,area:"Grant Grove Village",desc:"General store — snacks, groceries, camping supplies.",maps:"https://www.google.com/maps/search/?api=1&query=Grant+Grove+Market+Kings+Canyon+National+Park+CA"},
+  {name:"Lodgepole Market Center",cat:"food",lat:36.5988,lng:-118.7272,area:"Lodgepole Village, Sequoia NP",desc:"Market, deli, and gift shop inside the park.",maps:"https://www.google.com/maps/search/?api=1&query=Lodgepole+Market+Center+Sequoia+National+Park+CA"},
+  {name:"Grant Grove Restaurant",cat:"food",lat:36.7455,lng:-118.9714,area:"Grant Grove Village",desc:"Sit-down dining inside Kings Canyon.",maps:"https://www.google.com/maps/search/?api=1&query=Grant+Grove+Restaurant+Kings+Canyon+National+Park+CA"},
+  {name:"Lodgepole Grill",cat:"food",lat:36.599,lng:-118.7268,area:"Lodgepole Village, Sequoia NP",desc:"Quick-service grill inside Sequoia NP.",maps:"https://www.google.com/maps/search/?api=1&query=Lodgepole+Grill+Sequoia+National+Park+CA"},
+  {name:"Hume Lake Snack Shop",cat:"food",lat:36.7938,lng:-118.9022,area:"Hume Lake",desc:"Camp store snacks by the lake.",maps:"https://www.google.com/maps/search/?api=1&query=Hume+Lake+Camp+Store+Kings+Canyon+CA"},
+  {name:"Hume Lake Gas Station",cat:"food",lat:36.7936,lng:-118.9018,area:"Hume Lake",desc:"Last gas before heading deeper into the canyon.",maps:"https://www.google.com/maps/search/?api=1&query=Hume+Lake+Gas+Station+Kings+Canyon+CA"},
+  {name:"Village Market (Three Rivers)",cat:"food",lat:36.4372,lng:-118.9014,area:"Three Rivers, CA",desc:"Full grocery store in Three Rivers on Hwy 198.",maps:"https://www.google.com/maps/search/?api=1&query=Village+Market+Three+Rivers+CA"},
+  {name:"Grant Grove Gift Shop",cat:"food",lat:36.7456,lng:-118.9715,area:"Grant Grove Village",desc:"Souvenirs and park gear.",maps:"https://www.google.com/maps/search/?api=1&query=Grant+Grove+Gift+Shop+Kings+Canyon+National+Park+CA"},
+  {name:"Wuksachi Lodge Gift Shop",cat:"food",lat:36.6063,lng:-118.7666,area:"Wuksachi Lodge, Sequoia NP",desc:"Upscale gift shop inside the lodge.",maps:"https://www.google.com/maps/search/?api=1&query=Wuksachi+Lodge+Sequoia+National+Park+CA"}
+];
+
+function distColor(mi) {
+  if (!mi || mi < 2) return '#4CAF50';
+  if (mi <= 5) return '#FF9800';
+  return '#F44336';
+}
+
+function catConfig(cat, mi) {
+  return {
+    half:     { color: distColor(mi), emoji: '🥾', label: 'Half-day hike' },
+    full:     { color: distColor(mi), emoji: '🥾', label: 'Full-day hike' },
+    nature:   { color: distColor(mi), emoji: '🌿', label: 'Nature walk' },
+    activity: { color: '#2196F3',    emoji: '⭐', label: 'Activity' },
+    food:     { color: '#795548',    emoji: '🛒', label: 'Food & supplies' }
+  }[cat] || { color: '#888', emoji: '📍', label: '' };
+}
+
+function makeIcon(cat, mi) {
+  const cfg = catConfig(cat, mi);
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:28px;height:28px;border-radius:50%;background:${cfg.color};border:2.5px solid rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 5px rgba(0,0,0,0.4);cursor:pointer;">${cfg.emoji}</div>`,
+    iconSize: [28,28], iconAnchor: [14,14], popupAnchor: [0,-16]
+  });
+}
+
+const campIcon = L.divIcon({
+  className: '',
+  html: `<div style="display:flex;flex-direction:column;align-items:center;">
+    <div style="width:40px;height:40px;border-radius:8px;background:#E65100;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 2px 10px rgba(0,0,0,0.45);cursor:pointer;">🏕️</div>
+    <div style="margin-top:3px;white-space:nowrap;font-size:9px;font-weight:700;background:#E65100;color:#fff;padding:2px 6px;border-radius:3px;letter-spacing:0.05em;box-shadow:0 1px 3px rgba(0,0,0,0.3);">BASE CAMP</div>
+  </div>`,
+  iconSize: [40,56], iconAnchor: [20,20], popupAnchor: [0,-24]
+});
+
+const map = L.map('map').setView([36.68, -118.78], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 18
+}).addTo(map);
+
+L.marker([36.7462, -118.9693], { icon: campIcon, zIndexOffset: 1000 })
+  .bindPopup(`<div style="min-width:210px;max-width:250px;">
+    <div class="camp-tag">🏕️ Base Camp</div>
+    <div class="popup-title">Sunset Campground</div>
+    <div class="popup-meta">Grant Grove Village · Kings Canyon NP</div>
+    <div class="popup-meta" style="margin-bottom:6px;">Elevation 6,500 ft · 158 sites</div>
+    <div class="popup-desc">Directly across from the Kings Canyon Visitor Center. Walking distance to Grant Grove, restaurants, and the General Grant Tree trail.</div>
+    <div class="popup-links"><a href="https://www.google.com/maps/search/?api=1&query=Sunset+Campground+Kings+Canyon+National+Park+CA" target="_blank">Open in Maps</a></div>
+  </div>`)
+  .addTo(map);
+
+const markers = [];
+const activeFilters = new Set(['half','full','nature','activity','food']);
+
+locations.forEach(loc => {
+  const marker = L.marker([loc.lat, loc.lng], { icon: makeIcon(loc.cat, loc.dist) });
+  const cfg = catConfig(loc.cat, loc.dist);
+  const distStr = loc.dist ? ` · ${loc.dist} mi` : '';
+  marker.bindPopup(`<div style="min-width:210px;max-width:250px;">
+    <div class="popup-title">${loc.name}</div>
+    <div class="popup-type" style="color:${cfg.color};">${cfg.label}${distStr}</div>
+    <div class="popup-meta">${loc.area}${loc.drive ? ' · ' + loc.drive + ' from camp' : ''}</div>
+    ${loc.desc ? `<div class="popup-desc">${loc.desc}</div>` : ''}
+    <div class="popup-links">
+      <a href="${loc.maps}" target="_blank">Open in Maps</a>
+      ${loc.alltrails ? `<a href="${loc.alltrails}" target="_blank">AllTrails</a>` : ''}
+    </div>
+  </div>`);
+  marker._cat = loc.cat;
+  marker.addTo(map);
+  markers.push(marker);
+});
+
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if (!btn) return;
+  const cat = btn.dataset.cat;
+  if (cat === 'all') {
+    const allOn = activeFilters.size === 5;
+    if (allOn) activeFilters.clear();
+    else ['half','full','nature','activity','food'].forEach(c => activeFilters.add(c));
+  } else {
+    if (activeFilters.has(cat)) activeFilters.delete(cat);
+    else activeFilters.add(cat);
+  }
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    if (b.dataset.cat === 'all') b.classList.toggle('active', activeFilters.size === 5);
+    else b.classList.toggle('active', activeFilters.has(b.dataset.cat));
+  });
+  markers.forEach(m => {
+    if (activeFilters.has(m._cat)) map.addLayer(m);
+    else map.removeLayer(m);
+  });
+});
+</script>
+</body>
+</html>
